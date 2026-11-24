@@ -98,6 +98,7 @@ final class AndroidControl: DeviceControl {
         case .volumeDown: tap(keycode: 25)
         case .power: tap(keycode: 26)
         case .notifications: client.send(Message(type: 5).data)
+        case .controlCenter: break
         case .rotate: client.send(Message(type: 11).data)
         }
     }

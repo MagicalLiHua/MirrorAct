@@ -300,6 +300,8 @@ agent stops right away. Then:
 - trackpad or mouse wheel: scroll (iOS adds the momentum itself)
 - typing goes to the active text field, ⌘V types the text from the Mac clipboard
 - Home, App Switcher, Notification Center, volume and lock are in the tool rail and the context menu
+- On iPad, open Control Center from the tool rail or context menu. To compose text with a Mac input
+  method such as Pinyin, select a text field on the iPad and choose **Type on iPad…** (⇧⌘I).
 
 This works over the cable and wirelessly; MirrorAct reaches the agent through usbmuxd (like Xcode)
 or over the local network. Gestures are sent when you release the mouse button, so the finger does

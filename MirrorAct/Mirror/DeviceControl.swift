@@ -56,7 +56,7 @@ enum TouchPhase {
 }
 
 enum DeviceButton: CaseIterable, Identifiable {
-    case back, home, recents, notifications, volumeUp, volumeDown, power, rotate
+    case back, home, recents, notifications, controlCenter, volumeUp, volumeDown, power, rotate
 
     var id: Self { self }
 
@@ -72,6 +72,7 @@ enum DeviceButton: CaseIterable, Identifiable {
         case .home: String(localized: "Home")
         case .recents: String(localized: "Recent Apps")
         case .notifications: String(localized: "Notifications")
+        case .controlCenter: String(localized: "Control Center")
         case .volumeUp: String(localized: "Volume Up")
         case .volumeDown: String(localized: "Volume Down")
         case .power: String(localized: "Screen On/Off")
@@ -85,6 +86,7 @@ enum DeviceButton: CaseIterable, Identifiable {
         case .home: "circle"
         case .recents: "square.on.square"
         case .notifications: "bell"
+        case .controlCenter: "switch.2"
         case .volumeUp: "speaker.plus"
         case .volumeDown: "speaker.minus"
         case .power: "power"

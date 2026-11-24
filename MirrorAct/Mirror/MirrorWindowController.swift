@@ -68,7 +68,8 @@ final class MirrorWindowController: NSWindowController, NSWindowDelegate {
             toggleControl: { [weak self] in self?.toggleControl() },
             press: { [weak self] button in self?.session.control?.press(button) },
             copyText: { [weak self] in self?.session.copyText() },
-            toggleTranslation: { [weak self] in self?.session.toggleTranslation() })
+            toggleTranslation: { [weak self] in self?.session.toggleTranslation() },
+            composeText: { [weak self] in self?.composeText() })
 
         railView = NSHostingView(rootView: MirrorToolRail(session: session, chrome: chrome, actions: actions))
         hudView = PassthroughHostingView(rootView: MirrorHUD(session: session))
@@ -248,6 +249,12 @@ final class MirrorWindowController: NSWindowController, NSWindowDelegate {
         }
         if let control = session.control {
             if session.isControlReady {
+                if canComposeText, let compose = a.composeText {
+                    let item = ActionMenuItem(String(localized: "Type on iPad…"), key: "i", compose)
+                    item.keyEquivalentModifierMask = [.command, .shift]
+                    item.image = NSImage(systemSymbolName: "character.cursor.ibeam", accessibilityDescription: nil)
+                    menu.addItem(item)
+                }
                 for button in control.buttons {
                     let item = ActionMenuItem(button.title) { a.press(button) }
                     let glyph = control.glyph(for: button)
@@ -536,6 +543,43 @@ final class MirrorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     // MARK: Control
+
+    var canComposeText: Bool {
+        session.profile.family == .iPad && session.state == .live && session.isControlReady
+    }
+
+    func composeText() {
+        guard canComposeText, let control = session.control, let parentWindow = presentation ?? window,
+              parentWindow.attachedSheet == nil else { return }
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.usesSingleLineMode = true
+        field.setAccessibilityLabel(String(localized: "Type on iPad…"))
+
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Type on iPad…")
+        alert.informativeText = String(localized: "Select a text field on the iPad before opening this window.")
+        alert.accessoryView = field
+        alert.addButton(withTitle: String(localized: "Send"))
+        let cancel = alert.addButton(withTitle: String(localized: "Cancel"))
+        cancel.keyEquivalent = "\u{1b}"
+        alert.layout()
+        alert.window.initialFirstResponder = field
+        alert.beginSheetModal(for: parentWindow) { [weak self, weak parentWindow, weak control] response in
+            guard let self else { return }
+            if let parentWindow, self.frameView.window === parentWindow, self.frameView.acceptsFirstResponder {
+                parentWindow.makeFirstResponder(self.frameView)
+            }
+            guard response == .alertFirstButtonReturn else { return }
+            field.validateEditing()
+            guard !field.stringValue.isEmpty else { return }
+            guard let control, self.canComposeText, self.session.control === control else {
+                NSSound.beep()
+                return
+            }
+            control.paste(field.stringValue)
+        }
+    }
 
     /// Turn control on/off (iPhone: start the agent on the device)
     func toggleControl() {

@@ -23,6 +23,7 @@ struct MirrorActions {
     /// Copy the text on the screen; translate it in place on/off
     var copyText: () -> Void = {}
     var toggleTranslation: () -> Void = {}
+    var composeText: (() -> Void)?
 }
 
 /// Visibility of the tools
@@ -118,9 +119,22 @@ struct MirrorToolRail: View {
     @ViewBuilder private var controlButtons: some View {
         if let control = session.control, let state = session.controlState {
             if state == .ready {
-                HStack(spacing: 0) {
-                    ForEach(control.buttons.prefix(3)) { button in
-                        NavButton(glyph: control.glyph(for: button), title: button.title) { actions.press(button) }
+                VStack(spacing: 2) {
+                    HStack(spacing: 0) {
+                        ForEach(control.buttons.prefix(3)) { button in
+                            NavButton(glyph: control.glyph(for: button), title: button.title) { actions.press(button) }
+                        }
+                    }
+                    if session.state == .live, control.buttons.contains(.controlCenter) {
+                        HStack(spacing: 0) {
+                            NavButton(glyph: control.glyph(for: .controlCenter), title: DeviceButton.controlCenter.title) {
+                                actions.press(.controlCenter)
+                            }
+                            if let composeText = actions.composeText {
+                                NavButton(glyph: .init(symbol: "keyboard"), title: String(localized: "Type on iPad…"),
+                                          action: composeText)
+                            }
+                        }
                     }
                 }
                 .padding(.bottom, 4)
@@ -223,6 +237,7 @@ private struct NavButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(title)
+        .accessibilityLabel(Text(title))
     }
 }
 

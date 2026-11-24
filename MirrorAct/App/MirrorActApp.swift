@@ -108,6 +108,9 @@ struct MirrorCommands: Commands {
             }
             Button("Control Device") { mirror?.toggleControl() }
                 .keyboardShortcut("c", modifiers: [.command, .option])
+            Button("Type on iPad…") { mirror?.composeText() }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(!model.keyMirrorCanComposeText)
             Divider()
             Button("Larger") { mirror?.zoomIn() }
                 .keyboardShortcut("+")

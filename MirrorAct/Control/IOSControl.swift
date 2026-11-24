@@ -15,7 +15,11 @@ final class IOSControl: @preconcurrency DeviceControl {
         var time: TimeInterval
     }
 
-    let buttons: [DeviceButton] = [.home, .recents, .notifications, .volumeUp, .volumeDown, .power]
+    var buttons: [DeviceButton] {
+        var buttons: [DeviceButton] = [.home, .recents, .notifications]
+        if isPad { buttons.append(.controlCenter) }
+        return buttons + [.volumeUp, .volumeDown, .power]
+    }
 
     private(set) var state: ControlState = .off {
         didSet { if state != oldValue { onStateChange?(state) } }
@@ -75,6 +79,7 @@ final class IOSControl: @preconcurrency DeviceControl {
     }
 
     private var isActive: Bool { state == .ready || state == .starting }
+    private var isPad: Bool { session?.profile.family == .iPad }
 
     /// Agent built with scripts/build-agent.sh?
     static var isAgentBuilt: Bool { ControlWorker.agentTestRun() != nil }
@@ -106,8 +111,9 @@ final class IOSControl: @preconcurrency DeviceControl {
     private func begin(automatic: Bool) {
         guard !isActive else { return }
         let name = session?.deviceName ?? ""
+        let iPadScreenSize = isPad ? session?.screenPointSize : nil
         state = .starting
-        worker.start(deviceName: name, launch: { [weak self] udid, testRun, onOutput in
+        worker.start(deviceName: name, iPadScreenSize: iPadScreenSize, launch: { [weak self] udid, testRun, onOutput in
             // runs on the main thread
             MainActor.assumeIsolated {
                 guard let self else { return nil }
@@ -307,6 +313,11 @@ final class IOSControl: @preconcurrency DeviceControl {
         case .notifications:
             send([TouchPoint(x: 0.3, y: 0.002, time: 0), TouchPoint(x: 0.3, y: 0.15, time: 0.1),
                   TouchPoint(x: 0.3, y: 0.6, time: 0.3)])
+        case .controlCenter:
+            guard isPad else { return }
+            // Swipe down from the upper-right edge of the mirrored screen.
+            send([TouchPoint(x: 0.95, y: 0.002, time: 0), TouchPoint(x: 0.95, y: 0.15, time: 0.1),
+                  TouchPoint(x: 0.95, y: 0.6, time: 0.3)])
         case .back:
             // back gesture from the left edge
             send([TouchPoint(x: 0.002, y: 0.5, time: 0), TouchPoint(x: 0.15, y: 0.5, time: 0.08),
@@ -359,12 +370,13 @@ private final class ControlWorker: @unchecked Sendable {
     // MARK: Start
 
     /// completion: UDID of the device whose agent the control uses
-    func start(deviceName: String, launch: @escaping Launcher,
+    func start(deviceName: String, iPadScreenSize: CGSize?, launch: @escaping Launcher,
                completion: @escaping @Sendable (Result<String, Error>) -> Void) {
         let current = bumpGeneration()
         queue.async { [self] in
             do {
-                let udid = try connect(deviceName: deviceName, generation: current, launch: launch)
+                let udid = try connect(deviceName: deviceName, iPadScreenSize: iPadScreenSize,
+                                       generation: current, launch: launch)
                 completion(.success(udid))
             } catch {
                 connection?.disconnect()
@@ -395,7 +407,8 @@ private final class ControlWorker: @unchecked Sendable {
         lock.withLock { generation == value }
     }
 
-    private func connect(deviceName: String, generation current: Int, launch: Launcher) throws -> String {
+    private func connect(deviceName: String, iPadScreenSize: CGSize?, generation current: Int,
+                         launch: Launcher) throws -> String {
         guard let testRun = Self.agentTestRun() else {
             throw StartError(message: String(localized: "The control agent is not built yet. In the MirrorAct folder, run: scripts/build-agent.sh"))
         }
@@ -414,7 +427,7 @@ private final class ControlWorker: @unchecked Sendable {
         if let running = AgentConnection.routes(udid: udid, host: knownHost).lazy.map({ AgentConnection(route: $0) })
             .first(where: { $0.isAlive() }) {
             Log.info("Control: agent already running (\(running.route))")
-            try openSession(running)
+            try openSession(running, iPadScreenSize: iPadScreenSize)
             return udid
         }
 
@@ -456,7 +469,7 @@ private final class ControlWorker: @unchecked Sendable {
             guard isCurrent(current) else { throw CancellationError() }
             if let connection = AgentConnection.routes(udid: udid, host: host).lazy.map({ AgentConnection(route: $0) })
                 .first(where: { $0.isAlive() }) {
-                try openSession(connection)
+                try openSession(connection, iPadScreenSize: iPadScreenSize)
                 return udid
             }
             if attempt < 19 { Thread.sleep(forTimeInterval: 0.25) }
@@ -498,7 +511,7 @@ private final class ControlWorker: @unchecked Sendable {
         }
     }
 
-    private func openSession(_ connection: AgentConnection) throws {
+    private func openSession(_ connection: AgentConnection, iPadScreenSize: CGSize?) throws {
         let capabilities: [String: Any] = [
             "shouldWaitForQuiescence": false,
             "waitForIdleTimeout": 0,
@@ -515,8 +528,18 @@ private final class ControlWorker: @unchecked Sendable {
             "animationCoolOffTimeout": 0,
             "waitForIdleTimeout": 0,
         ]])
-        if let size = try? connection.request("GET", "/session/\(id)/window/size") as? [String: Any],
-           let width = size["width"] as? Double, let height = size["height"] as? Double, width > 0, height > 0 {
+        let size: [String: Any]?
+        if let iPadScreenSize {
+            // Mirror coordinates cover the whole screen even when the foreground app is windowed.
+            let display = try? connection.request("GET", "/session/\(id)/wda/screen") as? [String: Any]
+            size = display?["screenSize"] as? [String: Any]
+            screen = CGSize(width: min(iPadScreenSize.width, iPadScreenSize.height),
+                            height: max(iPadScreenSize.width, iPadScreenSize.height))
+        } else {
+            size = try? connection.request("GET", "/session/\(id)/window/size") as? [String: Any]
+        }
+        if let width = size?["width"] as? Double, let height = size?["height"] as? Double,
+           width.isFinite, height.isFinite, width > 0, height > 0 {
             screen = CGSize(width: min(width, height), height: max(width, height))
         }
         Log.info("Control: session \(id) via \(connection.route), screen \(Int(screen.width))×\(Int(screen.height)) pt")

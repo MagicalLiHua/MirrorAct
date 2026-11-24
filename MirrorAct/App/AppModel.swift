@@ -33,6 +33,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var openSessionIDs: Set<String> = []
     /// whether the mirror the Device menu acts on translates, for the check mark in the menu bar
     @Published private(set) var keyMirrorIsTranslating = false
+    @Published private(set) var keyMirrorCanComposeText = false
     private var keyMirrorChanges: AnyCancellable?
     private var captures: [String: USBCaptureSession] = [:]
     private weak var wirelessSession: MirrorSession?
@@ -46,21 +47,27 @@ final class AppModel: ObservableObject {
             ?? controllers.first
     }
 
-    /// The menu bar shows the state of the key mirror: it changes with the key window and with
-    /// the translating of any open session.
+    /// The Device menu follows the key window and the state of its device session.
     private func observeKeyMirror() {
-        let translating = controllers.values.map { $0.session.$isTranslating.map { _ in () } }
-        keyMirrorChanges = Publishers.MergeMany(translating)
+        let sessionChanges = controllers.values.map { controller in
+            let session = controller.session
+            return Publishers.CombineLatest4(session.$isTranslating, session.$state,
+                                             session.$profile, session.$controlState).map { _ in () }
+        }
+        keyMirrorChanges = Publishers.MergeMany(sessionChanges)
             .merge(with: NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification).map { _ in () })
             // @Published announces a change before it is made: read the state afterwards
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.updateKeyMirrorIsTranslating() }
-        updateKeyMirrorIsTranslating()
+            .sink { [weak self] in self?.updateKeyMirrorMenuState() }
+        updateKeyMirrorMenuState()
     }
 
-    private func updateKeyMirrorIsTranslating() {
-        let translating = keyMirror?.session.isTranslating ?? false
+    private func updateKeyMirrorMenuState() {
+        let mirror = keyMirror
+        let translating = mirror?.session.isTranslating ?? false
+        let canComposeText = mirror?.canComposeText ?? false
         if translating != keyMirrorIsTranslating { keyMirrorIsTranslating = translating }
+        if canComposeText != keyMirrorCanComposeText { keyMirrorCanComposeText = canComposeText }
     }
 
     func isMirroring(cableDevice id: String) -> Bool { openSessionIDs.contains("usb:\(id)") }

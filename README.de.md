@@ -327,6 +327,9 @@ beim Beenden von MirrorAct wird er gestoppt. Endet eine kabellose Verbindung (au
 - Trackpad oder Mausrad: Scrollen (den Schwung ergänzt iOS selbst)
 - Tippen geht in das aktive Textfeld, ⌘V tippt den Text aus der Zwischenablage des Macs
 - Home, App-Umschalter, Mitteilungszentrale, Lautstärke und Sperren in der Werkzeugleiste und im Kontextmenü
+- Auf dem iPad lässt sich das Kontrollzentrum über die Werkzeugleiste oder das Kontextmenü öffnen.
+  Für eine Mac-Eingabemethode wie Pinyin zuerst ein Textfeld auf dem iPad auswählen und dann
+  **Auf dem iPad tippen …** (⇧⌘I) wählen.
 
 Das geht per Kabel und kabellos; MirrorAct erreicht den Agent über usbmuxd (wie Xcode) oder über das
 lokale Netzwerk. Gesten werden beim Loslassen der Maustaste geschickt, der Finger folgt der Maus also
